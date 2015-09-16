@@ -30236,9 +30236,11 @@ define('husky_components/datagrid/decorators/table-view',[],function() {
          * Adds a row to the datagrid
          * @param record {Object} the new record to add
          */
-        addRecord: function(record) {
+        addRecord: function(record, appendAtBottom) {
+            var prepend = (!!appendAtBottom) ? false : this.options.addRowTop;
+
             this.removeEmptyIndicator();
-            this.renderBodyRow(record, this.options.addRowTop);
+            this.renderBodyRow(record, prepend);
             this.setAlternateClasses();
         },
 
@@ -31631,7 +31633,7 @@ define('husky_components/datagrid/decorators/thumbnail-view',[],function() {
          * Parses the data and passes it to a render function
          * @param thumbnails {Array} array with thumbnails to render
          */
-        renderThumbnails: function(thumbnails) {
+        renderThumbnails: function(thumbnails, appendAtBottom) {
             var imgSrc, imgAlt, title, description, id, thumbnail;
 
             this.thumbnailFormat = (this.options.large === false) ? this.options.smallThumbnailFormat : this.options.largeThumbnailFormat;
@@ -31674,7 +31676,7 @@ define('husky_components/datagrid/decorators/thumbnail-view',[],function() {
                 description = description.join(constants.descriptionDelimiter);
 
                 // pass the found data to a render method
-                this.renderThumbnail(id, imgSrc, imgAlt, title, description, record);
+                this.renderThumbnail(id, imgSrc, imgAlt, title, description, record, appendAtBottom);
             }.bind(this));
         },
 
@@ -31687,7 +31689,7 @@ define('husky_components/datagrid/decorators/thumbnail-view',[],function() {
          * @param description {String} the thumbnail description to render
          * @param record {Object} the original data record
          */
-        renderThumbnail: function(id, imgSrc, imgAlt, title, description, record) {
+        renderThumbnail: function(id, imgSrc, imgAlt, title, description, record, appendAtBottom) {
             this.$thumbnails[id] = this.sandbox.dom.createElement(
                 this.sandbox.util.template(templates.item)({
                     imgSrc: imgSrc,
@@ -31704,7 +31706,11 @@ define('husky_components/datagrid/decorators/thumbnail-view',[],function() {
             }
             this.sandbox.dom.data(this.$thumbnails[id], 'id', id);
             this.sandbox.dom.hide(this.$thumbnails[id]);
-            this.sandbox.dom.append(this.$el, this.$thumbnails[id]);
+            if (!!appendAtBottom) {
+                this.sandbox.dom.append(this.$el, this.$thumbnails[id]);
+            } else {
+                this.sandbox.dom.prepend(this.$el, this.$thumbnails[id]);
+            }
             this.sandbox.dom.fadeIn(this.$thumbnails[id], this.options.fadeInDuration);
 
             this.bindThumbnailDomEvents(id);
@@ -31819,8 +31825,8 @@ define('husky_components/datagrid/decorators/thumbnail-view',[],function() {
          * @param record
          * @public
          */
-        addRecord: function(record) {
-            this.renderThumbnails([record]);
+        addRecord: function(record, appendAtBottom) {
+            this.renderThumbnails([record], appendAtBottom);
         },
 
         /**
@@ -32220,7 +32226,7 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
         },
 
         constants = {
-            paginationClass: 'pagination-wrapper infinite',
+            paginationClass: 'pagination-wrapper infinite-scroll',
             paginationElementClass: 'pagination',
             loaderClass: 'pagination-loader'
         },
@@ -32287,6 +32293,7 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
 
             this.startLoader();
             this.bindInfiniteScroll();
+            this.fillScrollContainer();
         },
 
         /**
@@ -32303,7 +32310,7 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
                     }
                 }
             ]);
-            this.$loader.hide();
+            this.$loader.css('opacity', '0');
         },
 
         /**
@@ -32331,23 +32338,33 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
          * Binds dom related events
          */
         bindInfiniteScroll: function() {
-            this.sandbox.infiniteScroll.initialize(this.options.scrollContainer, this.appendNextPage.bind(this), 0);
+            this.sandbox.infiniteScroll.initialize(this.options.scrollContainer, this.appendNextPage.bind(this));
+        },
+
+        fillScrollContainer: function() {
+            if ($(this.options.scrollContainer)[0].clientHeight >= $(this.options.scrollContainer)[0].scrollHeight){
+                this.appendNextPage().then(function(hasNextPage) {
+                    if (hasNextPage) {
+                        this.fillScrollContainer();
+                    }
+                }.bind(this));
+            }
         },
 
         appendNextPage: function() {
             var promise = $.Deferred();
 
             if (!!this.datagrid.data.links && !!this.datagrid.data.links.next) {
-                this.$loader.show();
+                this.$loader.css('opacity', '1');
 
                 this.sandbox.util.load(this.datagrid.data.links.next.href).then(function(data) {
                     this.updateDatagrid(data);
+                    this.$loader.css('opacity', '0');
 
-                    this.$loader.hide();
-                    promise.resolve();
+                    promise.resolve(true);
                 }.bind(this))
             } else {
-                promise.resolve();
+                promise.resolve(false);
             }
 
             return promise;
@@ -32362,11 +32379,12 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
 
             this.addRecordsToDatagrid(data._embedded[this.datagrid.options.resultKey]);
         },
+
         addRecordsToDatagrid: function(records) {
             this.sandbox.util.foreach(records, function(record) {
                 if (!!record.id) {
                     this.datagrid.data.embedded.push(record);
-                    this.datagrid.gridViews[this.datagrid.viewId].addRecord(record);
+                    this.datagrid.gridViews[this.datagrid.viewId].addRecord(record, true);
                 }
             }.bind(this));
         }
@@ -33768,7 +33786,7 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
                     if (!!recordData.id) {
                         this.pushRecords([recordData]);
                     }
-                    this.gridViews[this.viewId].addRecord(recordData);
+                    this.gridViews[this.viewId].addRecord(recordData, false);
                     this.sandbox.emit(NUMBER_SELECTIONS.call(this), this.getSelectedItemIds().length);
                 }
             },
@@ -33784,7 +33802,7 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
                     this.sandbox.util.foreach(records, function(record) {
                         if (!!record.id) {
                             this.pushRecords([record]);
-                            this.gridViews[this.viewId].addRecord(record);
+                            this.gridViews[this.viewId].addRecord(record, false);
                         }
                     }.bind(this));
                     if (typeof callback === 'function') {
@@ -44430,7 +44448,7 @@ define('__component__$data-navigation@husky',[
          * @method startInfiniteScroll
          */
         startInfiniteScroll: function() {
-            this.sandbox.infiniteScroll.initialize('.iscroll', this.loadNextPage.bind(this), 10);
+            this.sandbox.infiniteScroll.initialize('.iscroll', this.loadNextPage.bind(this));
         },
 
         /**
@@ -49434,52 +49452,34 @@ define("datepicker-zh-TW", function(){});
 
         var scrollTimer = null,
 
-            scrollListener = function(event, sandbox, padding, callback) {
-                if (sandbox.dom.data(sandbox.dom.find(event.currentTarget), 'blocked') !== 'on') {
-                    return;
+            scrollListener = function(selector, padding, callback) {
+                if (!$(selector).data('blocked')) {
+                    if (!!scrollTimer) {
+                        clearTimeout(scrollTimer);   // clear any previous pending timer
+                    }
+                    scrollTimer = setTimeout(scrollHandler.bind(this, selector, padding, callback), 50);
                 }
-
-                if (!!scrollTimer) {
-                    clearTimeout(scrollTimer);   // clear any previous pending timer
-                }
-                scrollTimer = setTimeout(
-                    scrollHandler.bind(this, event, sandbox, padding, callback), 50
-                );
             },
 
-            scrollHandler = function(event, sandbox, padding, callback) {
-                var $currentTarget = sandbox.dom.find(event.currentTarget),
-                    $inner = getHeighestChild($currentTarget),
+            scrollHandler = function(selector, padding, callback) {
+                var scrollContainer = $(selector),
+                    containerHeight = scrollContainer[0].clientHeight,
+                    contentHeight = scrollContainer[0].scrollHeight,
+                    scrollTop = scrollContainer.scrollTop(),
+                    padding = (isNaN(padding)) ? 0 : padding;
 
-                    borderTopWidth = parseInt(sandbox.dom.css($currentTarget, 'borderTopWidth')),
-                    borderTopWidthInt = isNaN(borderTopWidth) ? 0 : borderTopWidth,
-                    iContainerTop = parseInt(sandbox.dom.css($currentTarget, 'paddingTop')) + borderTopWidthInt,
-                    iTopHeight = sandbox.dom.offset($currentTarget).top,
-                    innerTop = $inner.length ? sandbox.dom.offset($inner).top : 0,
-                    iTotalHeight = Math.ceil(iTopHeight - innerTop + $currentTarget.height() + iContainerTop);
-
-                if (iTotalHeight + (isNaN(padding) ? 0 : padding) >= $inner.outerHeight()) {
-                    sandbox.dom.data($currentTarget, 'blocked', 'off');
+                if ((containerHeight + scrollTop + padding - contentHeight) >= 0) {
+                    scrollContainer.data('blocked', true);
                     var result = callback();
 
                     if (!!result && !!result.then) {
                         result.then(function() {
-                            sandbox.dom.data($currentTarget, 'blocked', 'on');
+                            $(selector).removeData('blocked');
                         });
                     } else {
-                        sandbox.dom.data($currentTarget, 'blocked', 'on');
+                        $(selector).removeData('blocked');
                     }
                 }
-            },
-
-            getHeighestChild = function($parent) {
-                var $heighestChild = $($parent.children()[0]);
-                $parent.children().each(function(index, $child) {
-                    if ($($child).outerHeight() > $heighestChild.outerHeight()) {
-                        $heighestChild = $($child);
-                    }
-                }.bind(this))
-                return $heighestChild;
             };
 
         return {
@@ -49490,15 +49490,12 @@ define("datepicker-zh-TW", function(){});
                 app.sandbox.infiniteScroll = {
 
                     initialize: function(selector, callback, padding) {
-                        $(selector).data('blocked', 'on');
-
-                        app.sandbox.dom.on(selector, 'scroll.infinite', function(event) {
-                            scrollListener(event, app.sandbox, padding, callback);
+                        app.sandbox.dom.on(selector, 'scroll.infinite', function() {
+                            scrollListener(selector, padding, callback);
                         });
                     },
 
                     destroy: function(selector) {
-                        $(selector).removeData('blocked');
                         this.sandbox.dom.off(selector, 'scroll.infinite');
                     }
                 }

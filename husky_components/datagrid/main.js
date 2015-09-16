@@ -1393,7 +1393,7 @@
                     if (!!recordData.id) {
                         this.pushRecords([recordData]);
                     }
-                    this.gridViews[this.viewId].addRecord(recordData);
+                    this.gridViews[this.viewId].addRecord(recordData, false);
                     this.sandbox.emit(NUMBER_SELECTIONS.call(this), this.getSelectedItemIds().length);
                 }
             },
@@ -1409,7 +1409,7 @@
                     this.sandbox.util.foreach(records, function(record) {
                         if (!!record.id) {
                             this.pushRecords([record]);
-                            this.gridViews[this.viewId].addRecord(record);
+                            this.gridViews[this.viewId].addRecord(record, false);
                         }
                     }.bind(this));
                     if (typeof callback === 'function') {
