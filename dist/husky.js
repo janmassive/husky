@@ -32222,6 +32222,7 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
 
     var defaults = {
             scrollContainer: '.page',
+            reachedBottomMessage: 'you reached the end of the list',
             limit: 20
         },
 
@@ -32238,6 +32239,7 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
             paginationContainer: [
                 '<div class="' + constants.paginationClass + '">',
                 '   <div class="' + constants.loaderClass + '"/>',
+                '   <span class="pagination-message"><%= reachedBottomMessage %></span>',
                 '</div>'
             ].join('')
         };
@@ -32287,7 +32289,12 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
             this.$el = $container;
             this.data = data;
 
-            this.$paginationContainer = this.sandbox.dom.createElement(templates.paginationContainer);
+            this.$paginationContainer = this.sandbox.dom.createElement(
+                this.sandbox.util.template(templates.paginationContainer, {
+                    reachedBottomMessage: this.sandbox.translate(this.options.reachedBottomMessage)
+                })
+            );
+
             this.$loader = $(this.$paginationContainer).find('.' + constants.loaderClass);
             this.sandbox.dom.append(this.$el, this.$paginationContainer);
 
@@ -32342,12 +32349,13 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
         },
 
         fillScrollContainer: function() {
-            if ($(this.options.scrollContainer)[0].clientHeight >= $(this.options.scrollContainer)[0].scrollHeight){
-                this.appendNextPage().then(function(hasNextPage) {
-                    if (hasNextPage) {
-                        this.fillScrollContainer();
-                    }
-                }.bind(this));
+            var $scrollContainer = $(this.options.scrollContainer);
+            if ($scrollContainer[0].clientHeight >= $scrollContainer.scrollHeight) {
+                if (!!this.datagrid.data.links && !!this.datagrid.data.links.next) {
+                    this.appendNextPage().then(function() {
+                            this.fillScrollContainer();
+                    }.bind(this));
+                }
             }
         },
 
@@ -32364,6 +32372,7 @@ define('husky_components/datagrid/decorators/infinite-scroll-pagination',[],func
                     promise.resolve(true);
                 }.bind(this))
             } else {
+                this.$paginationContainer.addClass('reached-end');
                 promise.resolve(false);
             }
 
@@ -49496,7 +49505,7 @@ define("datepicker-zh-TW", function(){});
                     },
 
                     destroy: function(selector) {
-                        this.sandbox.dom.off(selector, 'scroll.infinite');
+                        app.sandbox.dom.off(selector, 'scroll.infinite');
                     }
                 }
             }
